@@ -1,17 +1,16 @@
-import { pool } from "../config/dbConnect";
-import path from "path";
-import fs from "fs/promises";
-import bcrypt from "bcryptjs";
 import { Request, Response } from "express";
-import { isValidEmail, generateJWTToken } from "../utils/auth";
-import { getDetails } from "../services/user";
-import { transporter } from "../config/emailConfig";
-import { getHtmlTemplate } from "../utils/template";
+import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
+import { getFirestore, doc, setDoc } from "firebase/firestore";
+import { db } from "../config/dbConnect";  // Initialize Firestore here
+import { isValidEmail } from "../utils/auth";  // Validation utility
+import { updatePassword } from "firebase/auth";
+import {  signInWithEmailAndPassword } from "firebase/auth";
+import { sendPasswordResetEmail } from "firebase/auth";
 
-// Define a custom interface that extends the Request interface with the _id property
 interface AuthenticatedRequest extends Request {
-  _id?: string; // Make it optional or provide a default value if needed
+  _id?: string;
 }
+const auth = getAuth();
 
 const register = async (req: Request, res: Response) => {
   const { name, email, password } = req.body;
@@ -25,31 +24,25 @@ const register = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Invalid email address" });
     }
 
-    const emailExists = await getDetails("email", email);
-    if (emailExists) {
-      return res.status(401).json({ message: "Email already registered" });
-    }
+    // Create user in Firebase Auth
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Create new user
-    const { rows } = await pool.query(
-      "INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING _id, email",
-      [name, email, hashedPassword]
-    );
-
-    const newUser = rows[0];
-    const token = generateJWTToken({ _id: newUser._id, email: newUser.email });
-
-    return res.status(201).json({
-      data: { token: token },
-      message: "User registered successfully",
+    // Store additional user info in Firestore
+    await setDoc(doc(db, "users", user.uid), {
+      name,
+      email,
+      created_at: new Date(),
+      updated_at: new Date(),
     });
+
+    return res.status(201).json({ message: "User registered successfully", uid: user.uid });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Internal server error" });
   }
 };
+
 
 const login = async (req: Request, res: Response) => {
   const { email, password } = req.body;
@@ -63,31 +56,19 @@ const login = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Invalid email address" });
     }
 
-    const emailExists = await getDetails("email", email);
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
 
-    if (!emailExists) {
-      return res.status(404).json({ message: "Email not registered" });
-    }
+    // Generate JWT token using Firebase (if needed for custom logic)
+    const token = await user.getIdToken();
 
-    const matchPassword = await bcrypt.compare(password, emailExists.password);
-    if (!matchPassword) {
-      return res.status(401).json({ message: "Incorrect password" });
-    }
-
-    const token = generateJWTToken({
-      _id: emailExists._id,
-      email: emailExists.email,
-    });
-
-    return res.status(200).json({
-      data: { token: token },
-      message: "User logged-in successfully",
-    });
+    return res.status(200).json({ token, message: "User logged-in successfully" });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Internal server error" });
   }
 };
+
 
 const forgotPassword = async (req: Request, res: Response) => {
   const { email } = req.body;
@@ -96,43 +77,12 @@ const forgotPassword = async (req: Request, res: Response) => {
     if (!email) {
       return res.status(400).json({ message: "Email is required" });
     }
+
     if (!isValidEmail(email)) {
       return res.status(400).json({ message: "Invalid email address" });
     }
 
-    const emailExists = await getDetails("email", email);
-    if (!emailExists) {
-      return res.status(401).json({ message: "Email not registered" });
-    }
-
-    const resetPasswordToken = generateJWTToken(
-      { _id: emailExists._id, email: emailExists.email },
-      { expiresIn: "1h" }
-    );
-
-    const resetPasswordLink = `${process.env.CLIENT_PROD_URL}/auth/reset-password?token=${resetPasswordToken}`;
-
-    // Read the email template
-    const templatePath = path.join(
-      __dirname,
-      "..",
-      "templates",
-      "passwordReset.html"
-    );
-    const emailTemplate = await fs.readFile(templatePath, { encoding: "utf8" });
-
-    // Replace the placeholder with the actual reset link
-    const htmlContent = emailTemplate.replace(
-      /{{resetPasswordLink}}/g,
-      resetPasswordLink
-    );
-
-    // Send the email
-    await transporter.sendMail({
-      to: email,
-      subject: "Password Reset Request",
-      html: htmlContent,
-    });
+    await sendPasswordResetEmail(auth, email);
 
     return res.status(200).json({ message: "Reset password link sent" });
   } catch (error) {
@@ -141,26 +91,21 @@ const forgotPassword = async (req: Request, res: Response) => {
   }
 };
 
+
 const resetPassword = async (req: AuthenticatedRequest, res: Response) => {
   const { password } = req.body;
-  const id = req._id;
+  const user = auth.currentUser; // Get currently authenticated user
 
   try {
     if (!password) {
       return res.status(400).json({ message: "Password is required" });
     }
 
-    const userExists = await getDetails("_id", id);
-    if (userExists) {
-      const hashedPassword = await bcrypt.hash(password, 10);
-      await pool.query("UPDATE users SET password = $1 WHERE _id = $2", [
-        hashedPassword,
-        id,
-      ]);
-
+    if (user) {
+      await updatePassword(user, password);
       return res.status(200).json({ message: "Password reset successful" });
     } else {
-      return res.status(401).json({ message: "User doesn't exist" });
+      return res.status(401).json({ message: "User is not authenticated" });
     }
   } catch (error) {
     console.error(error);
@@ -168,4 +113,4 @@ const resetPassword = async (req: AuthenticatedRequest, res: Response) => {
   }
 };
 
-export { register, login, forgotPassword, resetPassword };
+export {register, login, resetPassword, forgotPassword}

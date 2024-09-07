@@ -1,191 +1,122 @@
 import { Request, Response } from "express";
-import { pool } from "../config/dbConnect";
-import { getDetails } from "../services/user";
+import { getFirestore, collection, query, where, getDocs, limit, orderBy, startAfter } from "firebase/firestore";
+import { db } from "../config/dbConnect";  // Firestore instance
+import { doc, setDoc } from "firebase/firestore";
 import { encrypt } from "../utils/encryption";
-import { getPasswordDetails } from "../services/passwords";
+import {  updateDoc } from "firebase/firestore";
+import {  deleteDoc } from "firebase/firestore";
 
-// Define a custom interface that extends the Request interface with the _id property
 interface AuthenticatedRequest extends Request {
-  _id?: string; // Make it optional or provide a default value if needed
+  _id?: string;
 }
 
 const getAllPasswords = async (req: AuthenticatedRequest, res: Response) => {
-  const { search, limit, offset } = req.query;
-  const id = req._id;
+  const { search, limit: limitQuery, offset } = req.query;
+  const userId = req._id;
 
   try {
-    const user = await getDetails("_id", id);
+    const passwordsRef = collection(db, "passwords");
+    let q = query(passwordsRef, where("user_id", "==", userId), orderBy("created_at"));
 
-    if (user) {
-      const queryParams = [id];
-      let queryStr = "SELECT * FROM passwords WHERE user_id = $1";
-
-      if (search) {
-        queryParams.push(`%${search}%`);
-        queryStr += " AND website_name ILIKE $" + queryParams.length;
-      }
-
-      queryStr += " ORDER BY created_at";
-
-      if (limit) {
-        queryParams.push(limit.toString());
-        queryStr += " LIMIT $" + queryParams.length;
-      }
-
-      if (offset) {
-        queryParams.push(offset.toString());
-        queryStr += " OFFSET $" + queryParams.length;
-      }
-
-      queryStr += ";";
-
-      const { rows } = await pool.query(queryStr, queryParams);
-
-      return res
-        .status(200)
-        .json({ data: rows, message: "All saved passwords details" });
-    } else {
-      return res.status(404).json({ message: "User doesn't exist" });
+    if (search) {
+      q = query(q, where("website_name", ">=", search), where("website_name", "<=", search + '\uf8ff'));
     }
+
+    if (limitQuery) {
+      q = query(q, limit(parseInt(limitQuery as string)));
+    }
+
+    if (offset) {
+      q = query(q, startAfter(offset));
+    }
+
+    const querySnapshot = await getDocs(q);
+    const passwords = querySnapshot.docs.map(doc => doc.data());
+
+    return res.status(200).json({ data: passwords, message: "All saved passwords details" });
   } catch (error) {
-    //display error
-    console.log(error);
+    console.error(error);
     return res.status(500).json({ message: "Internal server error" });
   }
 };
 
+
 const createPassword = async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req._id;
+  const { title, description, websiteName, password } = req.body;
+
+  if (!websiteName || !password) {
+    return res.status(400).json({ message: "Required fields missing" });
+  }
+
   try {
-    const id = req._id;
-    const user = await getDetails("_id", id);
+    // Encrypt the password
+    const { encryptedData, base64data } = encrypt(password);
 
-    if (user) {
-      const { title, description, websiteName, password } = req.body;
+    const newPasswordDoc = doc(collection(db, "passwords"));
+    await setDoc(newPasswordDoc, {
+      user_id: userId,
+      title,
+      description,
+      website_name: websiteName,
+      password: encryptedData,
+      iv: base64data,
+      created_at: new Date(),
+      updated_at: new Date(),
+    });
 
-      if (!websiteName || !password) {
-        return res.status(400).json({ message: "Required fields missing" });
-      } else {
-        //encrypt the password before storing to db
-        const data = encrypt(password);
-        const encryptedPassword = data.encryptedData;
-        const base64data = data.base64data;
-
-        const { rows } = await pool.query(
-          `INSERT INTO passwords(title, description, website_name, password, iv, user_id)
-            VALUES($1, $2, $3, $4, $5, $6)
-            RETURNING *`,
-          [title, description, websiteName, encryptedPassword, base64data, id]
-        );
-
-        return res
-          .status(201)
-          .json({ data: rows[0], message: "Password data saved" });
-      }
-    } else {
-      return res.status(404).json({ message: "User doesn't exist" });
-    }
+    return res.status(201).json({ message: "Password data saved" });
   } catch (error) {
-    console.log(error);
+    console.error(error);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
+
 const updatePassword = async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req._id;
+  const passwordId = req.params.id;
+  const { title, description, websiteName, password } = req.body;
+
   try {
-    const id = req._id;
-    const user = await getDetails("_id", id);
+    const passwordRef = doc(db, "passwords", passwordId);
+    const updateData: any = {};
 
-    if (user) {
-      const { id } = req.params;
-      const passwordExists = await getPasswordDetails("_id", id);
+    if (title) updateData.title = title;
+    if (description) updateData.description = description;
+    if (websiteName) updateData.website_name = websiteName;
+    if (password) {
+      const { encryptedData, base64data } = encrypt(password);
+      updateData.password = encryptedData;
+      updateData.iv = base64data;
+    }
 
-      if (passwordExists) {
-        const { title, description, websiteName, password } = req.body;
-
-        // Build the update query dynamically
-        const updateFields = [];
-        const updateValues = [];
-
-        if (title && title !== "") {
-          updateFields.push(`title = $${updateValues.length + 1}`);
-          updateValues.push(title);
-        }
-
-        if (description && description !== "") {
-          updateFields.push(`description = $${updateValues.length + 1}`);
-          updateValues.push(description);
-        }
-
-        if (websiteName && websiteName !== "") {
-          updateFields.push(`website_name = $${updateValues.length + 1}`);
-          updateValues.push(websiteName);
-        }
-
-        if (password) {
-          //encrypt the password before storing to db
-          const data = encrypt(password);
-          const encryptedPassword = data.encryptedData;
-          const base64data = data.base64data;
-
-          updateFields.push(`password = $${updateValues.length + 1}`);
-          updateValues.push(encryptedPassword);
-          updateFields.push(`iv = $${updateValues.length + 1}`);
-          updateValues.push(base64data);
-        }
-
-        if (updateFields.length > 0) {
-          updateFields.push(`updated_at = $${updateValues.length + 1}`);
-          updateValues.push(new Date().toISOString());
-
-          const updateQuery = `UPDATE passwords SET ${updateFields.join(
-            ", "
-          )} WHERE _id = $${updateValues.length + 1} RETURNING *`;
-          updateValues.push(id);
-
-          const { rows } = await pool.query(updateQuery, updateValues);
-          return res
-            .status(200)
-            .json({ data: rows[0], message: "Data updated successfully" });
-        } else {
-          return res.status(200).json({ message: "No fields to update" });
-        }
-      } else {
-        return res.status(404).json({ message: "No such password data found" });
-      }
+    if (Object.keys(updateData).length > 0) {
+      updateData.updated_at = new Date();
+      await updateDoc(passwordRef, updateData);
+      return res.status(200).json({ message: "Data updated successfully" });
     } else {
-      return res.status(404).json({ message: "User doesn't exist" });
+      return res.status(200).json({ message: "No fields to update" });
     }
   } catch (error) {
-    console.log(error);
+    console.error(error);
     return res.status(500).json({ message: "Internal server error" });
   }
 };
+
 
 const deletePassword = async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req._id;
+  const passwordId = req.params.id;
+
   try {
-    const id = req._id;
-    const user = await getDetails("_id", id);
-
-    if (user) {
-      const { id } = req.params;
-      const passwordExists = await getPasswordDetails("_id", id);
-
-      if (passwordExists) {
-        await pool.query(`DELETE FROM passwords WHERE _id = $1`, [id]);
-
-        return res
-          .status(200)
-          .json({ message: "Password deleted successfully" });
-      } else {
-        return res.status(404).json({ message: "No such password data found" });
-      }
-    } else {
-      return res.status(404).json({ message: "User doesn't exist" });
-    }
+    const passwordRef = doc(db, "passwords", passwordId);
+    await deleteDoc(passwordRef);
+    return res.status(200).json({ message: "Password deleted successfully" });
   } catch (error) {
-    console.log(error);
+    console.error(error);
     return res.status(500).json({ message: "Internal server error" });
   }
 };
 
-export { getAllPasswords, createPassword, updatePassword, deletePassword };
+export {getAllPasswords, createPassword, deletePassword, updatePassword}

@@ -1,13 +1,9 @@
 import express from "express"
-import { register, login, forgotPassword, resetPassword } from "../controllers/auth"
+import { getUserDetails } from "../controllers/user"
 import isAuthenticated from "../middleware/auth"
 
+const userRouter = express.Router()
 
-const authRouter = express.Router()
+userRouter.get("/users", isAuthenticated, getUserDetails)
 
-authRouter.post("/register", register)
-authRouter.post("/login", login)
-authRouter.post("/forgot-password", forgotPassword)
-authRouter.post("/reset-password", isAuthenticated, resetPassword)
-
-export default authRouter
+export {userRouter}

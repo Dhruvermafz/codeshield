@@ -1,23 +1,32 @@
-import {Client} from "pg"
-import { Pool } from "postgres-pool"
+import { initializeApp } from "firebase/app";
+import { getFirestore } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
+import { config } from "dotenv";
 
-require("dotenv").config()
+config();  // Loads environment variables from .env file
 
-const connectionString = `postgres://${process.env.DATABASE_USER}:${process.env.DATABASE_PASSWORD}@${process.env.DATABASE_HOST}:${process.env.DATABASE_PORT}/${process.env.DATABASE_NAME}`
+// Your Firebase configuration object (you can find it in Firebase console)
+const firebaseConfig = {
+    apiKey: process.env.FIREBASE_API_KEY,
+    authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.FIREBASE_APP_ID
+};
 
-const client = new Client({
-    connectionString: connectionString,
-    ssl: {rejectUnauthorized: false}
-})
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);  // Firestore instance
+const auth = getAuth(app);     // Authentication instance
 
-const pool = new Pool({
-    connectionString: connectionString,
-    ssl: {rejectUnauthorized: false}
-})
+// Firebase connection test
+auth.onAuthStateChanged(user => {
+    if (user) {
+        console.log("Firebase connected and authenticated user: ", user.email);
+    } else {
+        console.log("No user is authenticated");
+    }
+});
 
-const connect = client.connect((err) => {
-if (err) console.log("Error connecting to PostgreSQL: ", err.stack)
-else console.log("Connected to PostgreSQL database")
-})
-
-export {client, connect, pool}
+export { db, auth };

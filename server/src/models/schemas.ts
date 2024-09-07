@@ -1,41 +1,46 @@
 import { Request, Response } from "express";
-import { pool } from "../config/dbConnect";
+import { db } from "../config/dbConnect";  // Firestore instance
+import { v4 as uuidv4 } from "uuid";  // For generating UUIDs
+import { collection, doc, setDoc, addDoc } from "firebase/firestore";  // Firestore methods
 
-const createSchemas = async (req: Request, res: Response) => {
+const createDocuments = async (req: Request, res: Response) => {
   try {
-    // Create the schemas
-    await pool.query(
-      `
-        CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    const userId = uuidv4(); // Generate a new UUID for the user
 
-        CREATE TABLE IF NOT EXISTS users (
-            _id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-            name VARCHAR(255) NOT NULL,
-            email VARCHAR(255) UNIQUE NOT NULL,
-            password VARCHAR(255) NOT NULL,
-            created_at TIMESTAMP DEFAULT NOW(),
-            updated_at TIMESTAMP DEFAULT NOW()
-        );
-        
-        CREATE TABLE IF NOT EXISTS passwords (
-            _id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-            title VARCHAR(255) NULL,
-            description VARCHAR(255) NULL,
-            website_name VARCHAR(255) NOT NULL,
-            password VARCHAR(255) NOT NULL,
-            iv VARCHAR(255) NOT NULL,
-            created_at TIMESTAMP DEFAULT NOW(),
-            updated_at TIMESTAMP DEFAULT NOW(),
-            user_id UUID REFERENCES users(_id)
-        );
-      `
-    );
+    // Example user data
+    const userData = {
+      _id: userId,
+      name: req.body.name,
+      email: req.body.email,
+      password: req.body.password,
+      created_at: new Date(),
+      updated_at: new Date(),
+    };
 
-    res.status(200).json("Schemas created successfully!");
+    // Add user data to the 'users' collection
+    await setDoc(doc(db, "users", userId), userData);
+
+    // Example password data
+    const passwordData = {
+      _id: uuidv4(),
+      title: req.body.title,
+      description: req.body.description,
+      website_name: req.body.website_name,
+      password: req.body.password,
+      iv: req.body.iv,  // Assuming iv is for encryption
+      created_at: new Date(),
+      updated_at: new Date(),
+      user_id: userId,  // Reference to the user
+    };
+
+    // Add password data to the 'passwords' collection
+    await addDoc(collection(db, "passwords"), passwordData);
+
+    res.status(200).json("Documents created successfully!");
   } catch (error) {
-    console.error("Error creating schemas:", error);
-    res.status(500).json("internal server error");
+    console.error("Error creating documents:", error);
+    res.status(500).json("Internal server error");
   }
 };
 
-export default createSchemas;
+export default createDocuments;

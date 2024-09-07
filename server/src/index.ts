@@ -1,8 +1,10 @@
 import express, {Request, Response} from "express"
 import dotenv from "dotenv"
 import cors from "cors"
-
-
+import authRouter from "./routers/auth"
+import passwordRouter from "./routers/password"
+import schemaRouter from "./routers/schema"
+import { userRouter } from "./routers/user"
 
 dotenv.config()
 
