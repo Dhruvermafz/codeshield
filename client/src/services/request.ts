@@ -1,6 +1,7 @@
 /**
  * Request Wrapper with default success/error actions
  */
+import config from "./config";
 const request = async function (options: any) {
     const onSuccess = async function (response: Response) {
       if (
@@ -22,7 +23,7 @@ const request = async function (options: any) {
   
     try {
       const response = await fetch(
-        process.env.NEXT_PUBLIC_BASE_URL + options.url,
+        config.NEXT_PUBLIC_BASE_URL + options.url,
         {
           method: options.method || "GET",
           headers: {
