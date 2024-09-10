@@ -118,7 +118,7 @@ export default function Register() {
             </p>
             <p className="mb-4">
               Tired of forgetting your passwords? Say goodbye to sticky notes
-              and random paper scraps with Key Safe.
+              and random paper scraps with CodeShield.
             </p>
           </div>
           <div className="">
