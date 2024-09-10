@@ -129,7 +129,7 @@ export default function Register() {
           <div className="my-3 mx-auto flex flex-col justify-center px-6 pt-8 md:justify-start lg:w-[28rem]">
             <p className="text-center text-3xl font-bold md:leading-tight md:text-left md:text-5xl">
               Welcome to <br />
-              <span className="text-blue-600">KeySafe.</span>
+              <span className="text-blue-600">CodeShield.</span>
             </p>
             <p className="mt-6 text-center font-medium md:text-left">
               Create your account below.

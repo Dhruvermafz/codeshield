@@ -1,6 +1,3 @@
-/**
- * Request Wrapper with default success/error actions
- */
 import config from "./config";
 const request = async function (options: any) {
     const onSuccess = async function (response: Response) {

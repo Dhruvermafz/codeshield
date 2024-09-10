@@ -95,7 +95,7 @@ const Login = () => {
           <div className="my-3 mx-auto flex flex-col justify-center px-6 pt-8 md:justify-start lg:w-[28rem]">
             <p className="text-center text-3xl font-bold md:leading-tight md:text-left md:text-5xl">
               Welcome back <br />
-              to <span className="text-blue-600">KeySafe.</span>
+              to <span className="text-blue-600">CodeShield.</span>
             </p>
             <p className="mt-6 text-center font-medium md:text-left">
               Sign in to your account below.
@@ -176,7 +176,7 @@ const Login = () => {
               .
             </p>
             <p className="mb-4">
-              Managing passwords can be tough, but with KeySafe, you don&apos;t
+              Managing passwords can be tough, but with CodeShield, you don&apos;t
               have to worry about forgetting them anymore.
             </p>
           </div>
