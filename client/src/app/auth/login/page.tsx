@@ -3,9 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import LoginSvg from "@/assets/Login.svg";
 import useThemeStore from "@/store/themeStore";
-
 import Image from "next/image";
-
 import useFetch from "@/hooks/useFetch";
 import { AuthService } from "@/services/AuthService";
 import { setCookie } from "cookies-next";
@@ -41,33 +39,46 @@ const Login = () => {
     getUserDetailsAPI,
   ] = useFetch(null);
 
+  // Handle login response
   useEffect(() => {
-    const { code, message } = loginData;
-
-    if (code === 200) {
+    console.log("Login Data:", loginData); // Inspect API response
+    if (loginData && loginData.code === 200) {
       const { data } = loginData;
-      const token = data.token;
+      const token = data?.token; // Optional chaining to avoid errors
 
-      setCookie("token", token);
-      setAuthToken(token);
+      if (token) {
+        setCookie("token", token);
+        setAuthToken(token);
 
-      getUserDetailsAPI(() => () => ProfileService.getUserProfile(token));
-    } else {
-      setErrorMessage(message);
+        getUserDetailsAPI(() => () => ProfileService.getUserProfile(token));
+      } else {
+        setErrorMessage("Login successful but token missing");
+      }
+    } else if (loginData && loginData.message) {
+      setErrorMessage(loginData.message); // Show API error message
+    } else if (isLoginError) {
+      setErrorMessage("Failed to login, please try again.");
     }
   }, [loginData, isLoginError]);
 
-  useEffect(() => {
-    const { code } = userDetailsData;
+  // Handle user profile data after login
+// Handle user profile data after login
+useEffect(() => {
+  if (userDetailsData && userDetailsData.code === 200) {
+    const { data } = userDetailsData;
+    console.log("User profile fetched:", data); // Log profile data
+    setProfile(data);
 
-    if (code === 200) {
-      const { data } = userDetailsData;
-      setProfile(data);
+    console.log("Redirecting to /dashboard...");
+    router.push("/dashboard"); // Redirect to dashboard after login
+  } else if (isUserDetailsError) {
+    setErrorMessage("Failed to fetch user profile.");
+    console.log("Error fetching user profile", isUserDetailsError);
+  }
+}, [userDetailsData, isUserDetailsError]);
 
-      router.push("/dashboard");
-    }
-  }, [userDetailsData, isUserDetailsError]);
 
+  // Handle form submission for login
   const onHandleSubmit = () => {
     if (email === "") {
       setErrorMessage("Enter Email");
@@ -75,8 +86,8 @@ const Login = () => {
       setErrorMessage("Enter Password");
     } else {
       setErrorMessage("");
-      getLoginAPI(
-        () => () => AuthService.emailLogin({ email: email, password: password })
+      getLoginAPI(() =>
+        AuthService.emailLogin({ email: email, password: password })
       );
     }
   };
@@ -85,13 +96,13 @@ const Login = () => {
     <div data-testid="login">
       <Navbar landingPage={false} />
       <div
-        className={`flex w-screen  flex-wrap ${
+        className={`flex w-screen flex-wrap ${
           theme === "light"
-            ? "text-slate-800 "
-            : "text-white  border-t-2 border-gray-600 bg-[#12141D]"
+            ? "text-slate-800"
+            : "text-white border-t-2 border-gray-600 bg-[#12141D]"
         }`}
       >
-        <div className="flex w-full  h-auto flex-col md:w-1/2">
+        <div className="flex w-full h-auto flex-col md:w-1/2">
           <div className="my-3 mx-auto flex flex-col justify-center px-6 pt-8 md:justify-start lg:w-[28rem]">
             <p className="text-center text-3xl font-bold md:leading-tight md:text-left md:text-5xl">
               Welcome back <br />
@@ -108,9 +119,9 @@ const Login = () => {
                     id="login-email"
                     className={`w-full flex-shrink appearance-none ${
                       theme === "light"
-                        ? "bg-[white] text-gray-700 "
-                        : "bg-[#12141D] text-white "
-                    } border-gray-500 py-2 px-4 text-base  placeholder-gray-400 focus:outline-none`}
+                        ? "bg-[white] text-gray-700"
+                        : "bg-[#12141D] text-white"
+                    } border-gray-500 py-2 px-4 text-base placeholder-gray-400 focus:outline-none`}
                     placeholder="Email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -126,7 +137,7 @@ const Login = () => {
                       theme === "light"
                         ? "bg-[white]  text-gray-700"
                         : "bg-[#12141D] text-white"
-                    } border-gray-500 py-2 px-4 text-base  placeholder-gray-400 focus:outline-none`}
+                    } border-gray-500 py-2 px-4 text-base placeholder-gray-400 focus:outline-none`}
                     placeholder="Password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -147,7 +158,7 @@ const Login = () => {
                 onClick={onHandleSubmit}
                 className="rounded-lg bg-blue-600 px-4 py-2 text-center text-base font-semibold text-white shadow-md outline-none ring-blue-500 ring-offset-2 transition hover:bg-blue-700 focus:ring-2 md:w-32"
               >
-                Sign in
+                {isLoginLoading ? "Signing in..." : "Sign in"}
               </button>
             </div>
             <div className="py-12 text-center">

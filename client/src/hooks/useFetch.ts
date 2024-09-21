@@ -8,10 +8,8 @@ interface Action {
 // Reducer function to manage state changes based on different actions
 const dataFetchReducer = (state: any, action: Action) => {
   switch (action.type) {
-    // Set loading state when data fetching starts
     case "FETCH_INIT":
       return { ...state, isLoading: true, isError: false };
-    // Set data and reset loading and error states on successful data fetch
     case "FETCH_SUCCESS":
       return {
         ...state,
@@ -19,7 +17,6 @@ const dataFetchReducer = (state: any, action: Action) => {
         isError: false,
         data: action.payload,
       };
-    // Set error state and provide error details on data fetch failure
     case "FETCH_FAILURE":
       return {
         ...state,
@@ -27,7 +24,6 @@ const dataFetchReducer = (state: any, action: Action) => {
         isError: true,
         error: action.payload,
       };
-    // Throw an error for unknown action types
     default:
       throw new Error();
   }
@@ -39,11 +35,10 @@ const useFetch = (
   initialData = {}
 ) => {
   // State for the current API action and a function to update it
-  const [action, setAction] = useState(() => initAction);
+  const [action, setAction] = useState<(() => Promise<any>) | null>(initAction);
 
   // Use a reducer to manage the loading, error, and data states
   const [state, dispatch] = useReducer(dataFetchReducer, {
-    // Set initial loading state based on the existence of the initial action
     isLoading: initAction ? true : false,
     isError: false,
     error: {},
@@ -55,46 +50,38 @@ const useFetch = (
 
     // Function to fetch data from the API
     const fetchData = async () => {
-      if (action) {
-        // Set loading state when data fetching starts
+      if (typeof action === "function") {  // Ensure action is a function before calling it
         dispatch({ type: "FETCH_INIT" });
 
         try {
-          // Execute the provided API action function
           const result = await action();
 
           if (!didCancel) {
             // Handle different cases based on the API response code
             switch (result.code) {
-              case 555:
               case 200:
               case 201:
-              case 400: {
+              case 400:
+              case 555:
                 dispatch({
                   type: "FETCH_SUCCESS",
                   payload: result,
                 });
                 break;
-              }
-              case -111:
               case 401:
               case 404:
-              case -222: {
+              case -111:
+              case -222:
                 dispatch({ type: "FETCH_SUCCESS", payload: result });
                 break;
-              }
-              case -888: {
+              case -888:
                 dispatch({ type: "FETCH_FAILURE", payload: result.message });
                 break;
-              }
-              default: {
+              default:
                 dispatch({ type: "FETCH_FAILURE", payload: result });
-              }
             }
           }
         } catch (error) {
-          console.log(error);
-
           if (!didCancel) {
             dispatch({ type: "FETCH_FAILURE", payload: error });
           }
@@ -104,11 +91,10 @@ const useFetch = (
 
     fetchData();
 
-    // Cleanup function to prevent state updates if the component unmounts before the fetch is complete
     return () => {
       didCancel = true;
     };
-  }, [action]); // Trigger the effect whenever the action changes
+  }, [action]);
 
   // Return the current state and a function to update the action
   return [state, setAction];
