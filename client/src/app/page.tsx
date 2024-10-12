@@ -180,12 +180,12 @@ export default function LandingPages() {
             </p>
             <div className="flex mx-auto justify-center font-semibold  text-white">
               <Github />
-              <Link href="https://github.com/abhijeetnishal/Password-Shield">
+              <Link href="https://github.com/Dhruvermafz/codeshield">
                 <p className="px-3 hover:underline">Github</p>
               </Link>
 
               <LinkedIn />
-              <Link href="https://www.linkedin.com/in/abhijeetkumar7565/">
+              <Link href="https://www.linkedin.com/in/Dhruvermafz">
                 <p className="px-3 hover:underline">Linkedin</p>
               </Link>
             </div>
